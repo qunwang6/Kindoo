@@ -1,6 +1,6 @@
 from django.conf.urls import url
-from .views import viewBook
+from .views import formHandler
 
 urlpatterns = [
-    url(r'^list/', viewBook),
+    url("", formHandler),
 ]

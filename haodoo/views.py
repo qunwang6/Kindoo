@@ -4,21 +4,26 @@ import re, requests, logging
 from Kindoo.apps_config import APPS_CONFIG as APPS_CONFIG
 from django.shortcuts import render
 from django.http import HttpResponse
+from django import forms
 
 HOST = "http://www.haodoo.net"
-EMAIL = "ko19950314@kindle.com"
 logger = logging.getLogger("django") #init python logger instance
 
-def viewBook(req):
-    parms = req.GET
-    if(getBook(bid=parms.get('id'))):
-        html = "Done!"
-    else:
-        html = "Fuck!"
-    return HttpResponse(html)
+class formBook(forms.Form):
+    email = forms.EmailField()
+    targetId = forms.CharField()
 
-def getBook(bid):
-    url = HOST + '/?M=book&P='+bid
+def formHandler(req):
+    if req.method == 'POST':
+        form = formBook(req.POST)
+        if form.is_valid():
+            requestHandler(req.POST)
+    else:
+        form = formBook()
+    return render(req, 'form.html', {'form': form})
+
+def requestHandler(parms):
+    url = HOST + '/?M=book&P='+parms.get('targetId')
     req = requests.get(url)
 
     if(req.status_code == 200):
@@ -27,16 +32,15 @@ def getBook(bid):
             filename = matchs[0] + '.prc'
             file = requests.get(HOST + "/?M=d&P="+filename, stream=True)
             if(file.status_code == 200):
-                if(downloadBookHandler(file, filename)):
-                    sendBookHandler(EMAIL, filename)
+                if(storeResource(file, 'files/' +filename)):
+                    sendResourceByEmail(parms.get('email'), 'files/' +filename)
                     return True
         else:
             logger.error("unexpected error")
     return False
 
 
-def downloadBookHandler(file, filename):
-    filename = 'files/' + filename
+def storeResource(file, filename):
     try:
         with open(filename, 'wb+') as destination:
             for chunk in file.iter_content(chunk_size=1024):
@@ -47,8 +51,7 @@ def downloadBookHandler(file, filename):
         logger.error("Download: File not exist")
         return False
 
-def sendBookHandler(email, filename):
-    filename = 'files/' + filename
+def sendResourceByEmail(email, filename):
     try:
         file = open(filename, "r")
         req = requests.post(APPS_CONFIG['MAILGUN']['api_url'],
