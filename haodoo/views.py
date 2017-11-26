@@ -5,19 +5,23 @@ from Kindoo.apps_config import APPS_CONFIG as APPS_CONFIG
 from django.shortcuts import render
 from django.http import HttpResponse
 from django import forms
+from django.views.decorators.csrf import csrf_exempt
 
 HOST = "http://www.haodoo.net"
 logger = logging.getLogger("django") #init python logger instance
+
 
 class formBook(forms.Form):
     email = forms.EmailField()
     targetId = forms.CharField()
 
+@csrf_exempt
 def formHandler(req):
     if req.method == 'POST':
         form = formBook(req.POST)
         if form.is_valid():
-            requestHandler(req.POST)
+            if(requestHandler(req.POST)):
+                return HttpResponse("true")
     else:
         form = formBook()
     return render(req, 'form.html', {'form': form})
@@ -28,13 +32,13 @@ def requestHandler(parms):
 
     if(req.status_code == 200):
         matchs = re.findall(r'DownloadPrc\(\'(.{1,6})\'\)', req.text)
-        if(matchs[0]):
+        if(matchs):
             filename = matchs[0] + '.prc'
             file = requests.get(HOST + "/?M=d&P="+filename, stream=True)
             if(file.status_code == 200):
                 if(storeResource(file, 'files/' +filename)):
-                    sendResourceByEmail(parms.get('email'), 'files/' +filename)
-                    return True
+                    if(sendResourceByEmail(parms.get('email'), 'files/' +filename)):
+                        return True
         else:
             logger.error("unexpected error")
     return False
@@ -65,8 +69,10 @@ def sendResourceByEmail(email, filename):
 
         if(req.status_code == 200):
             logger.error("Your book is good to go!")
+            return True
         else:
             logger.error("error with the email service")
-
+            return False
     except IOError:
         logger.error("Send: File not exist")
+        return False
